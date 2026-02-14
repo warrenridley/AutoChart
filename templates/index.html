@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stock Signal Analyzer — MACD · RSI(6) · Elliott Wave</title>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181a20;
+    --surface2: #1e2028;
+    --border: #2a2d38;
+    --text: #e1e4ea;
+    --text-dim: #8a8f9c;
+    --accent: #5b8def;
+    --green: #26a69a;
+    --red: #ef5350;
+    --yellow: #ffc107;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', -apple-system, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--accent);
+  }
+  .header h1 span { color: var(--text-dim); font-weight: 400; }
+  .search-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex: 1;
+    max-width: 520px;
+  }
+  .search-group input, .search-group select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .search-group input:focus, .search-group select:focus {
+    border-color: var(--accent);
+  }
+  .search-group input { width: 140px; text-transform: uppercase; }
+  .search-group select { width: 100px; }
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .auto-refresh {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+  .auto-refresh input { accent-color: var(--accent); }
+
+  /* Signal banner */
+  .signal-banner {
+    display: flex;
+    gap: 16px;
+    padding: 16px 24px;
+    flex-wrap: wrap;
+  }
+  .signal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 180px;
+  }
+  .signal-card .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .signal-card .value { font-size: 22px; font-weight: 700; }
+  .signal-card .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .signal-buy  .value { color: var(--green); }
+  .signal-sell .value { color: var(--red); }
+  .signal-hold .value { color: var(--yellow); }
+  .rsi-low  { color: var(--green) !important; }
+  .rsi-high { color: var(--red) !important; }
+  .rsi-mid  { color: var(--text) !important; }
+  .ew-bullish { color: var(--green) !important; }
+  .ew-bearish { color: var(--red) !important; }
+  .ew-neutral { color: var(--yellow) !important; }
+
+  /* Charts */
+  .charts-container {
+    padding: 0 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .chart-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+  }
+  .chart-box .chart-label {
+    position: absolute;
+    top: 8px; left: 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+    z-index: 2;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+
+  /* Signal Log */
+  .log-section {
+    padding: 0 24px 24px;
+  }
+  .log-section h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .signal-log {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .signal-log table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .signal-log th {
+    background: var(--surface2);
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .signal-log td {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+  }
+  .signal-log .buy-row td:first-child { color: var(--green); font-weight: 600; }
+  .signal-log .sell-row td:first-child { color: var(--red); font-weight: 600; }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .badge-buy  { background: rgba(38,166,154,.15); color: var(--green); }
+  .badge-sell { background: rgba(239,83,80,.15); color: var(--red); }
+
+  /* Loading */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,17,23,.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none; }
+
+  .error-msg {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--red);
+    font-size: 16px;
+  }
+  .footer {
+    text-align: center;
+    padding: 16px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading" class="loading-overlay hidden"><div class="spinner"></div></div>
+
+<!-- Header -->
+<div class="header">
+  <h1>Signal Analyzer <span>MACD · RSI(6) · Elliott Wave</span></h1>
+  <div class="search-group">
+    <input id="symbolInput" type="text" placeholder="AAPL" value="AAPL" />
+    <select id="periodSelect">
+      <option value="1mo">1 Month</option>
+      <option value="3mo">3 Months</option>
+      <option value="6mo" selected>6 Months</option>
+      <option value="1y">1 Year</option>
+      <option value="2y">2 Years</option>
+    </select>
+    <select id="intervalSelect">
+      <option value="1d" selected>Daily</option>
+      <option value="1h">Hourly</option>
+      <option value="5m">5 Min</option>
+      <option value="15m">15 Min</option>
+    </select>
+    <button class="btn" id="analyzeBtn" onclick="analyze()">Analyze</button>
+  </div>
+  <label class="auto-refresh">
+    <input type="checkbox" id="autoRefresh" /> Auto-refresh every 60s
+  </label>
+</div>
+
+<!-- Signal summary cards -->
+<div class="signal-banner" id="signalBanner">
+  <div class="signal-card" id="cardSignal">
+    <div class="label">Current Signal</div>
+    <div class="value" id="valSignal">—</div>
+    <div class="sub" id="valScore"></div>
+  </div>
+  <div class="signal-card">
+    <div class="label">Price</div>
+    <div class="value" id="valPrice">—</div>
+    <div class="sub" id="valName"></div>
+  </div>
+  <div class="signal-card">
+    <div class="label">RSI (6)</div>
+    <div class="value" id="valRSI">—</div>
+    <div class="sub" id="valRSISub"></div>
+  </div>
+  <div class="signal-card">
+    <div class="label">MACD</div>
+    <div class="value" id="valMACD">—</div>
+    <div class="sub" id="valMACDSub"></div>
+  </div>
+  <div class="signal-card">
+    <div class="label">Elliott Wave</div>
+    <div class="value" id="valWave">—</div>
+    <div class="sub" id="valWaveBias"></div>
+  </div>
+</div>
+
+<!-- Charts -->
+<div class="charts-container">
+  <div class="chart-box">
+    <div class="chart-label">Price · Buy / Sell Signals · Elliott Wave Swings</div>
+    <div id="priceChart" style="height:400px;"></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-label">MACD (12, 26, 9)</div>
+    <div id="macdChart" style="height:180px;"></div>
+  </div>
+  <div class="chart-box">
+    <div class="chart-label">RSI (6)</div>
+    <div id="rsiChart" style="height:160px;"></div>
+  </div>
+</div>
+
+<!-- Signal log -->
+<div class="log-section">
+  <h2>Recent Signals</h2>
+  <div class="signal-log">
+    <table>
+      <thead>
+        <tr><th>Signal</th><th>Date</th><th>Price</th><th>Score</th></tr>
+      </thead>
+      <tbody id="signalLog">
+        <tr><td colspan="4" style="text-align:center;color:var(--text-dim);">Enter a symbol and click Analyze</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="footer">Data provided by Yahoo Finance. Signals are for informational purposes only — not financial advice.</div>
+
+<div class="error-msg hidden" id="errorMsg"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let priceChartObj, macdChartObj, rsiChartObj;
+let refreshTimer = null;
+
+// ---------------------------------------------------------------------------
+// Chart helpers
+// ---------------------------------------------------------------------------
+function tsFromDateStr(d) {
+  // "YYYY-MM-DD HH:MM" → unix timestamp (seconds)
+  return Math.floor(new Date(d).getTime() / 1000);
+}
+
+function createChartInContainer(containerId, opts = {}) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = "";
+  return LightweightCharts.createChart(el, {
+    width: el.clientWidth,
+    height: el.clientHeight || parseInt(el.style.height),
+    layout: { background: { type: 'solid', color: '#181a20' }, textColor: '#8a8f9c' },
+    grid: { vertLines: { color: '#2a2d38' }, horzLines: { color: '#2a2d38' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    timeScale: { borderColor: '#2a2d38', timeVisible: true },
+    rightPriceScale: { borderColor: '#2a2d38' },
+    ...opts,
+  });
+}
+
+function resizeCharts() {
+  [['priceChart', priceChartObj], ['macdChart', macdChartObj], ['rsiChart', rsiChartObj]].forEach(([id, chart]) => {
+    if (!chart) return;
+    const el = document.getElementById(id);
+    chart.applyOptions({ width: el.clientWidth });
+  });
+}
+window.addEventListener('resize', resizeCharts);
+
+// ---------------------------------------------------------------------------
+// Analyze
+// ---------------------------------------------------------------------------
+async function analyze() {
+  const symbol = document.getElementById('symbolInput').value.trim() || 'AAPL';
+  const period = document.getElementById('periodSelect').value;
+  const interval = document.getElementById('intervalSelect').value;
+
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('errorMsg').classList.add('hidden');
+  document.getElementById('analyzeBtn').disabled = true;
+
+  try {
+    const resp = await fetch(`/api/analyze?symbol=${encodeURIComponent(symbol)}&period=${period}&interval=${interval}`);
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Unknown error');
+    }
+    const data = await resp.json();
+    renderDashboard(data);
+  } catch (e) {
+    document.getElementById('errorMsg').textContent = e.message;
+    document.getElementById('errorMsg').classList.remove('hidden');
+  } finally {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('analyzeBtn').disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+function renderDashboard(data) {
+  // --- Signal cards ---
+  const sig = data.latest.signal;
+  const cardSig = document.getElementById('cardSignal');
+  cardSig.className = 'signal-card signal-' + sig.toLowerCase();
+  document.getElementById('valSignal').textContent = sig;
+  document.getElementById('valScore').textContent = 'Composite score: ' + data.latest.score;
+
+  document.getElementById('valPrice').textContent = '$' + data.latest.price.toFixed(2);
+  document.getElementById('valName').textContent = (data.info.name || data.symbol) + ' · ' + data.info.exchange;
+
+  const rsiVal = data.latest.rsi;
+  const rsiEl = document.getElementById('valRSI');
+  rsiEl.textContent = rsiVal != null ? rsiVal.toFixed(2) : '—';
+  rsiEl.className = 'value ' + (rsiVal < 30 ? 'rsi-low' : rsiVal > 70 ? 'rsi-high' : 'rsi-mid');
+  document.getElementById('valRSISub').textContent = rsiVal < 30 ? 'Oversold' : rsiVal > 70 ? 'Overbought' : 'Neutral';
+
+  document.getElementById('valMACD').textContent = data.latest.macd.toFixed(4);
+  document.getElementById('valMACDSub').textContent = 'Signal: ' + data.latest.macd_signal.toFixed(4);
+
+  const waveEl = document.getElementById('valWave');
+  waveEl.textContent = data.elliott_wave.label;
+  waveEl.className = 'value ew-' + data.elliott_wave.bias;
+  document.getElementById('valWaveBias').textContent = 'Bias: ' + data.elliott_wave.bias;
+
+  // --- Price chart ---
+  priceChartObj = createChartInContainer('priceChart');
+  const candleSeries = priceChartObj.addCandlestickSeries({
+    upColor: '#26a69a', downColor: '#ef5350',
+    borderUpColor: '#26a69a', borderDownColor: '#ef5350',
+    wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+  });
+  const candleData = data.ohlc.dates.map((d, i) => ({
+    time: tsFromDateStr(d),
+    open: data.ohlc.open[i], high: data.ohlc.high[i],
+    low: data.ohlc.low[i], close: data.ohlc.close[i],
+  }));
+  candleSeries.setData(candleData);
+
+  // Buy markers
+  if (data.buy_markers.dates.length) {
+    const buyMarkers = data.buy_markers.dates.map((d, i) => ({
+      time: tsFromDateStr(d),
+      position: 'belowBar',
+      color: '#26a69a',
+      shape: 'arrowUp',
+      text: 'BUY',
+    }));
+    // Sell markers
+    const sellMarkers = data.sell_markers.dates.map((d, i) => ({
+      time: tsFromDateStr(d),
+      position: 'aboveBar',
+      color: '#ef5350',
+      shape: 'arrowDown',
+      text: 'SELL',
+    }));
+    const allMarkers = [...buyMarkers, ...sellMarkers].sort((a, b) => a.time - b.time);
+    candleSeries.setMarkers(allMarkers);
+  }
+
+  // Elliott wave swing overlay
+  if (data.elliott_wave.swings.length) {
+    const swingLine = priceChartObj.addLineSeries({
+      color: 'rgba(91,141,239,0.5)',
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      crosshairMarkerVisible: false,
+      pointMarkersVisible: true,
+      pointMarkersRadius: 3,
+    });
+    const swingData = data.elliott_wave.swings.map(s => ({
+      time: tsFromDateStr(s.date),
+      value: s.price,
+    }));
+    // De-duplicate times
+    const seen = new Set();
+    const uniqueSwing = swingData.filter(s => { if (seen.has(s.time)) return false; seen.add(s.time); return true; });
+    swingLine.setData(uniqueSwing);
+  }
+
+  priceChartObj.timeScale().fitContent();
+
+  // --- MACD chart ---
+  macdChartObj = createChartInContainer('macdChart');
+  const macdLine = macdChartObj.addLineSeries({ color: '#5b8def', lineWidth: 2 });
+  const macdSig = macdChartObj.addLineSeries({ color: '#ff9800', lineWidth: 1 });
+  const macdHist = macdChartObj.addHistogramSeries({
+    priceFormat: { type: 'price', precision: 4, minMove: 0.0001 },
+  });
+  const macdLineData = [], macdSigData = [], macdHistData = [];
+  data.ohlc.dates.forEach((d, i) => {
+    const t = tsFromDateStr(d);
+    if (data.indicators.macd[i] != null) macdLineData.push({ time: t, value: data.indicators.macd[i] });
+    if (data.indicators.macd_signal[i] != null) macdSigData.push({ time: t, value: data.indicators.macd_signal[i] });
+    if (data.indicators.macd_hist[i] != null) {
+      const v = data.indicators.macd_hist[i];
+      macdHistData.push({ time: t, value: v, color: v >= 0 ? 'rgba(38,166,154,0.5)' : 'rgba(239,83,80,0.5)' });
+    }
+  });
+  macdLine.setData(macdLineData);
+  macdSig.setData(macdSigData);
+  macdHist.setData(macdHistData);
+  macdChartObj.timeScale().fitContent();
+
+  // --- RSI chart ---
+  rsiChartObj = createChartInContainer('rsiChart');
+  const rsiLine = rsiChartObj.addLineSeries({ color: '#ab47bc', lineWidth: 2 });
+  const rsiData = [];
+  data.ohlc.dates.forEach((d, i) => {
+    const t = tsFromDateStr(d);
+    if (data.indicators.rsi[i] != null) rsiData.push({ time: t, value: data.indicators.rsi[i] });
+  });
+  rsiLine.setData(rsiData);
+
+  // Overbought / oversold reference lines
+  const rsiDates = rsiData.map(r => r.time);
+  if (rsiDates.length >= 2) {
+    const ob = rsiChartObj.addLineSeries({ color: 'rgba(239,83,80,0.3)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
+    const os = rsiChartObj.addLineSeries({ color: 'rgba(38,166,154,0.3)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
+    ob.setData([{ time: rsiDates[0], value: 70 }, { time: rsiDates[rsiDates.length - 1], value: 70 }]);
+    os.setData([{ time: rsiDates[0], value: 30 }, { time: rsiDates[rsiDates.length - 1], value: 30 }]);
+  }
+  rsiChartObj.timeScale().fitContent();
+
+  // Sync crosshairs
+  syncCharts([priceChartObj, macdChartObj, rsiChartObj]);
+
+  // --- Signal log ---
+  const tbody = document.getElementById('signalLog');
+  if (data.recent_signals.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);">No buy/sell signals in this period</td></tr>';
+  } else {
+    tbody.innerHTML = data.recent_signals.slice().reverse().map(s => `
+      <tr class="${s.signal.toLowerCase()}-row">
+        <td><span class="badge badge-${s.signal.toLowerCase()}">${s.signal}</span></td>
+        <td>${s.date}</td>
+        <td>$${s.price.toFixed(2)}</td>
+        <td>${s.score}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sync crosshairs across charts
+// ---------------------------------------------------------------------------
+function syncCharts(charts) {
+  charts.forEach((src, si) => {
+    src.subscribeCrosshairMove(param => {
+      if (!param || !param.time) return;
+      charts.forEach((tgt, ti) => {
+        if (si !== ti) {
+          // Lightweight charts v4 doesn't expose setCrosshairPosition publicly,
+          // but syncing time scales is useful.
+        }
+      });
+    });
+  });
+  // Sync visible range
+  charts.forEach((src, si) => {
+    src.timeScale().subscribeVisibleLogicalRangeChange(range => {
+      if (!range) return;
+      charts.forEach((tgt, ti) => {
+        if (si !== ti) tgt.timeScale().setVisibleLogicalRange(range);
+      });
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Auto-refresh
+// ---------------------------------------------------------------------------
+document.getElementById('autoRefresh').addEventListener('change', function () {
+  if (this.checked) {
+    analyze();
+    refreshTimer = setInterval(analyze, 60000);
+  } else {
+    clearInterval(refreshTimer);
+  }
+});
+
+// Enter key on symbol input triggers analyze
+document.getElementById('symbolInput').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') analyze();
+});
+
+// Initial load
+analyze();
+</script>
+</body>
+</html>
